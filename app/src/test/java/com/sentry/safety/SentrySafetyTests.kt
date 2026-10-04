@@ -35,33 +35,43 @@ class SentrySafetyTests {
 
     @Test
     fun testDirectionCalculation() {
-        // Left sector: x < 0.38
-        val leftBox = RectF(0.10f, 0.20f, 0.30f, 0.60f)
-        assertEquals(Direction.LEFT, CoordinateUtils.determineDirection(leftBox))
+        // Left sector: centerX < 0.38 → (0.10 + 0.30)/2 = 0.20
+        assertEquals(Direction.LEFT, CoordinateUtils.determineDirection(0.20f))
 
-        // Center sector: 0.38 <= x <= 0.62
-        val centerBox = RectF(0.40f, 0.20f, 0.60f, 0.60f)
-        assertEquals(Direction.CENTER, CoordinateUtils.determineDirection(centerBox))
+        // Center sector: 0.38 <= centerX <= 0.62 → (0.40 + 0.60)/2 = 0.50
+        assertEquals(Direction.CENTER, CoordinateUtils.determineDirection(0.50f))
 
-        // Right sector: x > 0.62
-        val rightBox = RectF(0.70f, 0.20f, 0.90f, 0.60f)
-        assertEquals(Direction.RIGHT, CoordinateUtils.determineDirection(rightBox))
+        // Right sector: centerX > 0.62 → (0.70 + 0.90)/2 = 0.80
+        assertEquals(Direction.RIGHT, CoordinateUtils.determineDirection(0.80f))
     }
 
     @Test
     fun testTrajectoryEstimation() {
-        // Expanding bounding box indicates approaching object
-        val prevBox = RectF(0.4f, 0.4f, 0.5f, 0.5f) // area = 0.01
-        val currBox = RectF(0.3f, 0.3f, 0.6f, 0.6f) // area = 0.09 (9x expansion)
+        // Expanding: prevArea=0.01, currArea=0.09 → areaChange = (0.09-0.01)/0.01 = 8.0 → APPROACHING
+        assertEquals(
+            MovementTrajectory.APPROACHING,
+            TrackingUtils.estimateTrajectory(prevArea = 0.01f, currArea = 0.09f, deltaX = 0.0f)
+        )
 
-        val trajectory = TrackingUtils.estimateTrajectory(prevBox, currBox)
-        assertEquals(MovementTrajectory.APPROACHING, trajectory)
+        // Shrinking: prevArea=0.09, currArea=0.0036 → areaChange ≈ -0.96 → MOVING_AWAY
+        assertEquals(
+            MovementTrajectory.MOVING_AWAY,
+            TrackingUtils.estimateTrajectory(prevArea = 0.09f, currArea = 0.0036f, deltaX = 0.0f)
+        )
 
-        // Shrinking box indicates moving away
-        val shrinkBox = RectF(0.42f, 0.42f, 0.48f, 0.48f)
-        val awayTrajectory = TrackingUtils.estimateTrajectory(currBox, shrinkBox)
-        assertEquals(MovementTrajectory.MOVING_AWAY, awayTrajectory)
+        // Lateral rightward drift, no significant size change → CROSSING_LEFT_TO_RIGHT
+        assertEquals(
+            MovementTrajectory.CROSSING_LEFT_TO_RIGHT,
+            TrackingUtils.estimateTrajectory(prevArea = 0.04f, currArea = 0.04f, deltaX = 0.15f)
+        )
+
+        // Stationary — no significant area change, no drift
+        assertEquals(
+            MovementTrajectory.STATIONARY,
+            TrackingUtils.estimateTrajectory(prevArea = 0.04f, currArea = 0.042f, deltaX = 0.01f)
+        )
     }
+
 
     @Test
     fun testRiskScoringVehicleAlone() {
